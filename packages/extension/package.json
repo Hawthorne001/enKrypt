@@ -121,7 +121,7 @@
     "rimraf": "^5.0.5",
     "rollup": "^4.17.2",
     "rollup-plugin-uglify": "^6.0.4",
-    "semver": "^7.6.1",
+    "semver": "^7.6.2",
     "stream-browserify": "^3.0.0",
     "stream-http": "^3.2.0",
     "systeminformation": "^5.22.8",
