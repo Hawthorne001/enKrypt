@@ -1,17 +1,17 @@
 import { BrowserStorageArea } from "@enkryptcom/types";
 import LocalForageLib from "localforage";
 
-class LocalForage implements BrowserStorageArea {
+export class LocalForage implements BrowserStorageArea {
   namespace: string;
 
-  private storage: globalThis.LocalForage;
+  private storage: typeof LocalForageLib;
 
   constructor(
     namespace: string,
     drivers: Array<string> = [
       LocalForageLib.INDEXEDDB,
       LocalForageLib.LOCALSTORAGE,
-    ]
+    ],
   ) {
     this.namespace = namespace;
     this.storage = LocalForageLib.createInstance({
@@ -54,11 +54,4 @@ class LocalForage implements BrowserStorageArea {
       })
       .then(() => storeOb);
   }
-
-  //   setDriver(driver: LocalForageDriver) {
-  //     this.storage.defineDriver(driver);
-  //     this.storage.setDriver(driver._driver);
-  //   }
 }
-
-export default LocalForage;

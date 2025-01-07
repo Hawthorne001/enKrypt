@@ -1,7 +1,11 @@
 import { NetworkNames, HWwalletType } from "@enkryptcom/types";
 import LedgerEthereum from "./ledger/ethereum";
+import LedgerBitcoin from "./ledger/bitcoin";
 import LedgerSubstrate from "./ledger/substrate";
-import TrezorEthereum from "./trezor";
+import TrezorEthereum from "./trezor/ethereum";
+import TrezorBitcoin from "./trezor/bitcoin";
+import LedgerSolana from "./ledger/solana";
+import TrezorSolana from "./trezor/solana";
 import {
   AddressResponse,
   getAddressRequest,
@@ -16,7 +20,11 @@ import { ledgerAppNames } from "./configs";
 type ProviderType =
   | typeof LedgerEthereum
   | typeof LedgerSubstrate
-  | typeof TrezorEthereum;
+  | typeof TrezorEthereum
+  | typeof LedgerBitcoin
+  | typeof TrezorBitcoin
+  | typeof LedgerSolana
+  | typeof TrezorSolana;
 class HWwalletManager {
   providerTypes: Record<HWwalletType, ProviderType[]>;
 
@@ -24,15 +32,20 @@ class HWwalletManager {
 
   constructor() {
     this.providerTypes = {
-      [HWwalletType.ledger]: [LedgerEthereum, LedgerSubstrate],
-      [HWwalletType.trezor]: [TrezorEthereum],
+      [HWwalletType.ledger]: [
+        LedgerEthereum,
+        LedgerSubstrate,
+        LedgerBitcoin,
+        LedgerSolana,
+      ],
+      [HWwalletType.trezor]: [TrezorEthereum, TrezorBitcoin, TrezorSolana],
     };
     this.providers = {};
   }
 
   async #initialize(
     wallet: HWwalletType,
-    network: NetworkNames
+    network: NetworkNames,
   ): Promise<void> {
     if (!this.providers[network]) {
       this.providers[network] = this.#getProvider(wallet, network);
@@ -43,7 +56,7 @@ class HWwalletManager {
   async getAddress(options: getAddressRequest): Promise<AddressResponse> {
     await this.#initialize(options.wallet, options.networkName);
     return (this.providers[options.networkName] as HWWalletProvider).getAddress(
-      options
+      options,
     );
   }
 
@@ -64,7 +77,7 @@ class HWwalletManager {
   async getSupportedPaths(options: isConnectedRequest): Promise<PathType[]> {
     return this.#getProvider(
       options.wallet,
-      options.networkName
+      options.networkName,
     ).getSupportedPaths();
   }
 
@@ -86,7 +99,7 @@ class HWwalletManager {
 
   async close(): Promise<void> {
     return Promise.all(
-      Object.values(this.providers).map((p) => (p as HWWalletProvider).close())
+      Object.values(this.providers).map((p) => (p as HWWalletProvider).close()),
     ).then();
   }
 

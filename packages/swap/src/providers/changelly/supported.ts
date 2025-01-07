@@ -1,8 +1,20 @@
+// import { isValidSolanaAddress } from "../../utils/solana";
 import { isPolkadotAddress, isEVMAddress } from "../../utils/common";
 import { SupportedNetworkName } from "../../types";
+import { isValidSolanaAddress } from "../../utils/solana";
 
+/**
+ * Blockchain names:
+ *
+ * ```sh
+ * curl -sL https://raw.githubusercontent.com/enkryptcom/dynamic-data/main/swaplists/changelly.json | jq --raw-output '.[].blockchain' | sort | uniq -c | sort -nr
+ * ```
+ * ```sh
+ * curl https://partners.mewapi.io/changelly-v2 -X POST -H Accept:application/json -H Content-Type:application/json --data '{"id":"1","jsonrpc":"2.0","method":"getCurrenciesFull","params":{}}'
+ * ````
+ */
 const supportedNetworks: {
-  [key in SupportedNetworkName]?: {
+  readonly [key in SupportedNetworkName]?: {
     changellyName: string;
     isAddress?: (addr: string) => Promise<boolean>;
   };
@@ -13,6 +25,10 @@ const supportedNetworks: {
   },
   [SupportedNetworkName.Binance]: {
     changellyName: "binance_smart_chain",
+    isAddress: (address: string) => Promise.resolve(isEVMAddress(address)),
+  },
+  [SupportedNetworkName.Base]: {
+    changellyName: "BASE",
     isAddress: (address: string) => Promise.resolve(isEVMAddress(address)),
   },
   [SupportedNetworkName.Matic]: {
@@ -50,6 +66,19 @@ const supportedNetworks: {
   [SupportedNetworkName.Dogecoin]: {
     changellyName: "doge",
   },
+  [SupportedNetworkName.Solana]: {
+    changellyName: "solana",
+    async isAddress(address: string) {
+      return isValidSolanaAddress(address);
+    },
+  },
+  [SupportedNetworkName.Rootstock]: {
+    changellyName: "rootstock",
+  },
 };
+
+export const supportedNetworksSet = new Set(
+  Object.keys(supportedNetworks),
+) as unknown as Set<SupportedNetworkName>;
 
 export default supportedNetworks;
