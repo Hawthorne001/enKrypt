@@ -4,12 +4,14 @@
       <img :src="token.logoURI" alt="" @error="imageLoadError" />
     </div>
     <div class="swap-token-select__info">
-      <h5>{{ token.name }}</h5>
+      <h5>
+        {{ $filters.truncate(token.name, 25) }}
+      </h5>
       <p>
         {{
           tokenBalance
             ? $filters.formatFloatingPointValue(tokenBalance).value
-            : "~"
+            : '~'
         }}
         <span>{{ token.symbol }}</span>
       </p>
@@ -31,15 +33,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, PropType } from "vue";
-import SwitchArrow from "@action/icons/header/switch_arrow.vue";
-import { computed } from "@vue/reactivity";
-import { TokenType, SwapToken } from "@enkryptcom/swap";
-import { imageLoadError } from "@/ui/action/utils/misc";
+import { ref, PropType } from 'vue';
+import SwitchArrow from '@action/icons/header/switch_arrow.vue';
+import { computed } from 'vue';
+import { TokenType, SwapToken } from '@enkryptcom/swap';
+import { imageLoadError } from '@/ui/action/utils/misc';
 
 const isOpen = ref(false);
 const emit = defineEmits<{
-  (e: "toggle:select", isOpen: boolean): void;
+  (e: 'toggle:select', isOpen: boolean): void;
 }>();
 
 const props = defineProps({
@@ -60,12 +62,12 @@ const tokenBalance = computed(() => {
 
 const open = () => {
   isOpen.value = !isOpen.value;
-  emit("toggle:select", isOpen.value);
+  emit('toggle:select', isOpen.value);
 };
 </script>
 
 <style lang="less">
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 .swap-token-select {
   height: 54px;
   background: #ffffff;

@@ -1,7 +1,18 @@
 <template>
   <div class="account">
     <a class="account__info" :class="{ active: active }" @click="showAccounts">
-      <img :src="network.identicon(address)" />
+      <div class="account__info-images">
+        <img
+          :src="network.identicon(address)"
+          class="account__info-images__identicon"
+        />
+        <img
+          :src="network.icon"
+          :alt="`Active network: ${network.name}`"
+          class="account__info-images__active-network"
+        />
+      </div>
+
       <div class="account__info-name">
         <p>{{ name }}</p>
         <span>{{ $filters.replaceWithEllipsis(address, 6, 4) }}</span>
@@ -68,35 +79,37 @@
 </template>
 
 <script setup lang="ts">
-import DomainState from "@/libs/domain-state";
-import BtcAccountState from "@/providers/bitcoin/libs/accounts-state";
-import EvmAccountState from "@/providers/ethereum/libs/accounts-state";
-import KadenaAccountState from "@/providers/kadena/libs/accounts-state";
-import SubstrateAccountState from "@/providers/polkadot/libs/accounts-state";
-import { BaseNetwork, SubNetworkOptions } from "@/types/base-network";
-import Notification from "@action/components/notification/index.vue";
-import Tooltip from "@action/components/tooltip/index.vue";
-import IconCopy from "@action/icons/header/copy_icon.vue";
-import IconDisconnect from "@action/icons/header/disconnect_icon.vue";
-import IconExternal from "@action/icons/header/external-icon.vue";
-import IconQr from "@action/icons/header/qr_icon.vue";
-import SwitchArrow from "@action/icons/header/switch_arrow.vue";
-import { PropType, computed, onMounted, ref, watch } from "vue";
-import SubnetList from "./subnet-list.vue";
+import DomainState from '@/libs/domain-state';
+import BtcAccountState from '@/providers/bitcoin/libs/accounts-state';
+import EvmAccountState from '@/providers/ethereum/libs/accounts-state';
+import KadenaAccountState from '@/providers/kadena/libs/accounts-state';
+import SolanaAccountState from '@/providers/solana/libs/accounts-state';
+import SubstrateAccountState from '@/providers/polkadot/libs/accounts-state';
+import { BaseNetwork, SubNetworkOptions } from '@/types/base-network';
+import Notification from '@action/components/notification/index.vue';
+import Tooltip from '@action/components/tooltip/index.vue';
+import IconCopy from '@action/icons/header/copy_icon.vue';
+import IconDisconnect from '@action/icons/header/disconnect_icon.vue';
+import IconExternal from '@action/icons/header/external-icon.vue';
+import IconQr from '@action/icons/header/qr_icon.vue';
+import SwitchArrow from '@action/icons/header/switch_arrow.vue';
+import { PropType, computed, onMounted, ref, watch } from 'vue';
+import SubnetList from './subnet-list.vue';
 
 const isCopied = ref(false);
 const domainState = new DomainState();
 const isConnectedDomain = ref(false);
 const showChains = ref(false);
 const currentSubNetwork = ref<SubNetworkOptions>({
-  id: "",
-  name: "",
+  id: '',
+  name: '',
 });
-const currentDomain = ref("");
+const currentDomain = ref('');
 const kadenaAccountState = new KadenaAccountState();
 const allAccountStates = [
   new EvmAccountState(),
   new BtcAccountState(),
+  new SolanaAccountState(),
   new SubstrateAccountState(),
   kadenaAccountState,
 ];
@@ -104,11 +117,11 @@ const allAccountStates = [
 const props = defineProps({
   name: {
     type: String,
-    default: "",
+    default: '',
   },
   address: {
     type: String,
-    default: "",
+    default: '',
   },
   active: Boolean,
   toggleAccounts: {
@@ -121,8 +134,8 @@ const props = defineProps({
   },
 });
 const emit = defineEmits<{
-  (e: "toggle:deposit"): void;
-  (e: "select:subnetwork", id: string): void;
+  (e: 'toggle:deposit'): void;
+  (e: 'select:subnetwork', id: string): void;
 }>();
 
 const copy = (address: string) => {
@@ -133,25 +146,25 @@ const showAccounts = () => {
   props.toggleAccounts();
 };
 const externalLink = computed(() => {
-  return props.network.blockExplorerAddr.replace("[[address]]", props.address);
+  return props.network.blockExplorerAddr.replace('[[address]]', props.address);
 });
 const toggleNotification = () => {
   isCopied.value = !isCopied.value;
 };
 const checkAndSetConnectedDapp = () => {
   Promise.all(
-    allAccountStates.map((as) => as.isConnected(currentDomain.value))
-  ).then((responses) => {
-    responses.forEach((res) => {
+    allAccountStates.map(as => as.isConnected(currentDomain.value)),
+  ).then(responses => {
+    responses.forEach(res => {
       if (res) isConnectedDomain.value = true;
     });
   });
 };
 const checkAndSetSubNetwork = () => {
   if (props.network.subNetworks) {
-    domainState.getSelectedSubNetWork().then((id) => {
+    domainState.getSelectedSubNetWork().then(id => {
       if (id) {
-        const subnet = props.network.subNetworks!.find((net) => net.id === id);
+        const subnet = props.network.subNetworks!.find(net => net.id === id);
         if (subnet) currentSubNetwork.value = subnet;
       } else {
         currentSubNetwork.value = props.network.subNetworks![0];
@@ -162,9 +175,9 @@ const checkAndSetSubNetwork = () => {
 };
 
 const setSubNetwork = async (id: string) => {
-  const subnet = props.network.subNetworks!.find((net) => net.id === id);
+  const subnet = props.network.subNetworks!.find(net => net.id === id);
   if (subnet) currentSubNetwork.value = subnet;
-  emit("select:subnetwork", id);
+  emit('select:subnetwork', id);
   setTimeout(() => {
     showChains.value = false;
   }, 100);
@@ -178,14 +191,14 @@ onMounted(async () => {
 watch(() => props.network, checkAndSetSubNetwork);
 const disconnectFromDapp = async () => {
   await Promise.all(
-    allAccountStates.map((as) => as.deleteState(currentDomain.value))
+    allAccountStates.map(as => as.deleteState(currentDomain.value)),
   );
   isConnectedDomain.value = false;
 };
 </script>
 
 <style lang="less">
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 
 .account {
   border-radius: 12px;
@@ -217,17 +230,31 @@ const disconnectFromDapp = async () => {
     height: 44px;
     cursor: pointer;
     transition: background 300ms ease-in-out;
+    &-images {
+      position: relative;
+      &__identicon {
+        width: 32px;
+        height: 32px;
+        margin-right: 12px;
+        border-radius: 50%;
+        margin-top: 2px;
+      }
+      &__active-network {
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        height: 15px;
+        width: 15px;
+        background: @white;
+        box-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.16);
+        padding: 1px;
+        border-radius: 50%;
+      }
+    }
 
     &:hover,
     &.active {
       background: @black007;
-    }
-
-    img {
-      width: 32px;
-      height: 32px;
-      margin-right: 12px;
-      border-radius: 50%;
     }
 
     &-name {

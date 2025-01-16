@@ -1,4 +1,4 @@
-import { SettingsType } from "@/libs/settings-state/types";
+import { SettingsType } from '@/libs/settings-state/types';
 
 export interface EnkryptWindow {
   enkrypt: {
@@ -7,5 +7,6 @@ export interface EnkryptWindow {
     };
     settings: SettingsType;
   };
+  unisat?: any;
   [key: string]: any;
 }

@@ -80,15 +80,19 @@
 </template>
 
 <script setup lang="ts">
-import { PropType, ref, computed, onMounted } from "vue";
-import CloseIcon from "@action/icons/common/close-icon.vue";
-import ArrowBack from "@action/icons/common/arrow-back.vue";
-import LabelInput from "@action/components/label-input/index.vue";
-import BaseButton from "@action/components/base-button/index.vue";
-import Web3 from "web3-eth";
-import { CustomEvmNetworkOptions } from "@/providers/ethereum/types/custom-evm-network";
-import { toHex } from "web3-utils";
-import CustomNetworksState from "@/libs/custom-networks-state";
+import { PropType, ref, computed, onMounted } from 'vue';
+import CloseIcon from '@action/icons/common/close-icon.vue';
+import ArrowBack from '@action/icons/common/arrow-back.vue';
+import LabelInput from '@action/components/label-input/index.vue';
+import BaseButton from '@action/components/base-button/index.vue';
+import Web3 from 'web3-eth';
+import { CustomEvmNetworkOptions } from '@/providers/ethereum/types/custom-evm-network';
+import { toHex } from 'web3-utils';
+import CustomNetworksState from '@/libs/custom-networks-state';
+import NetworksState from '@/libs/networks-state';
+
+import { trackNetwork } from '@/libs/metrics';
+import { NetworkChangeEvents } from '@/libs/metrics/types';
 
 interface NetworkConfigItem {
   name: string;
@@ -105,21 +109,22 @@ interface NetworkConfigItem {
 }
 
 const customNetworksState = new CustomNetworksState();
+const networksState = new NetworksState();
 
-const nameValue = ref<string>("");
+const nameValue = ref<string>('');
 const nameInvalid = ref(false);
 
-const rpcURLValue = ref<string>("");
+const rpcURLValue = ref<string>('');
 const rpcInvalid = ref(false);
 const rpcVerified = ref(false);
 
-const chainIDValue = ref<string>("");
+const chainIDValue = ref<string>('');
 const chainIDInvalid = ref(false);
 
-const symbolValue = ref<string>("");
+const symbolValue = ref<string>('');
 const symbolInvalid = ref(false);
 
-const blockURLValue = ref<string>("");
+const blockURLValue = ref<string>('');
 const blockURLInvalid = ref(false);
 
 const networkConfigs = ref<NetworkConfigItem[]>([]);
@@ -133,6 +138,10 @@ const isValid = computed<boolean>(() => {
 
   return true;
 });
+
+const emit = defineEmits<{
+  (e: 'update:pinNetwork', network: string, isPinned: boolean): void;
+}>();
 
 const props = defineProps({
   close: {
@@ -150,7 +159,7 @@ onMounted(() => {
 });
 
 const fetchNetworkConfigs = async () => {
-  const res = await fetch("https://chainid.network/chains.json");
+  const res = await fetch('https://chainid.network/chains.json');
   const data = await res.json();
 
   networkConfigs.value = data as NetworkConfigItem[];
@@ -179,7 +188,7 @@ const rpcURLChanged = async (newVal: string) => {
     rpcVerified.value = true;
 
     const networkConfig = networkConfigs.value.find(
-      (net) => net.chainId === chainId
+      net => net.chainId === chainId,
     );
 
     if (networkConfig) {
@@ -206,7 +215,7 @@ const chainIDChanged = (newVal: string) => {
   if (
     newVal.trim().length < 1 ||
     isNaN(Number(newVal.trim())) ||
-    newVal.includes(".")
+    newVal.includes('.')
   ) {
     chainIDInvalid.value = true;
   } else {
@@ -233,10 +242,10 @@ const sendAction = async () => {
   let blockExplorerAddr: string | undefined;
   let blockExplorerTX: string | undefined;
 
-  if (!blockURLInvalid.value && blockURLValue.value !== "") {
+  if (!blockURLInvalid.value && blockURLValue.value !== '') {
     let blockExplorer = blockURLValue.value;
 
-    if (!blockExplorer.endsWith("/")) {
+    if (!blockExplorer.endsWith('/')) {
       blockExplorer = `${blockExplorer}/`;
     }
 
@@ -245,7 +254,7 @@ const sendAction = async () => {
   }
 
   const customNetworkOptions: CustomEvmNetworkOptions = {
-    name: nameValue.value.trim().split(" ").join(""),
+    name: nameValue.value.trim().split(' ').join(''),
     name_long: nameValue.value,
     currencyName: symbolValue.value,
     currencyNameLong: nameValue.value,
@@ -256,20 +265,33 @@ const sendAction = async () => {
   };
 
   await customNetworksState.addCustomNetwork(customNetworkOptions);
+  await networksState.setNetworkStatus(customNetworkOptions.name, true);
 
-  nameValue.value = "";
-  symbolValue.value = "";
-  chainIDValue.value = "";
-  rpcURLValue.value = "";
-  blockURLValue.value = "";
+  trackNetwork(NetworkChangeEvents.NetworkCustomNetworkAdded, {
+    customRpcUrl: customNetworkOptions.node,
+    customNetworkName: customNetworkOptions.name,
+    customNetworkNameLong: customNetworkOptions.name_long,
+    customChainId: customNetworkOptions.chainID,
+    customNetworkCurrency: customNetworkOptions.currencyName,
+    customNetworkCurrencyLong: customNetworkOptions.currencyNameLong,
+    customBlockExplorerUrlTx: customNetworkOptions.blockExplorerTX,
+    customBlockExplorerUrlAddr: customNetworkOptions.blockExplorerAddr,
+  });
+
+  emit('update:pinNetwork', customNetworkOptions.name, true);
+  nameValue.value = '';
+  symbolValue.value = '';
+  chainIDValue.value = '';
+  rpcURLValue.value = '';
+  blockURLValue.value = '';
 
   props.back();
 };
 </script>
 
 <style lang="less" scoped>
-@import "~@action/styles/theme.less";
-@import "~@action/styles/custom-scroll.less";
+@import '@action/styles/theme.less';
+@import '@action/styles/custom-scroll.less';
 
 .add-network {
   width: 100%;

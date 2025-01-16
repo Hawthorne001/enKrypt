@@ -1,28 +1,46 @@
-import { ProviderName } from "@/types/provider";
-import { NetworkNames } from "@enkryptcom/types";
-import Metrics from "./amplitude";
+import { ProviderName } from '@/types/provider';
+import { NetworkNames } from '@enkryptcom/types';
+import Metrics from './amplitude';
 import {
   BuyEventType,
   DAppsEventType,
   GenericEvents,
   NFTEventType,
   NetworkChangeEvents,
+  NetworkType,
   SendEventType,
   SettingEventType,
   SwapEventType,
-} from "./types";
+  UpdatesEventType,
+  UpdatesOpenLocation
+} from './types';
 
 const metrics = new Metrics();
 
 const trackGenericEvents = (event: GenericEvents) => {
-  metrics.track("generic", { event });
+  metrics.track('generic', { event });
 };
 
-const trackNetworkSelected = (
+const trackNetwork = (
   event: NetworkChangeEvents,
-  options: { provider: ProviderName; network: NetworkNames }
+  options: {
+    provider?: ProviderName;
+    network?: NetworkNames,
+    networkTab?: string,
+    networkType?: NetworkType,
+    isPinned?: boolean,
+    sortOption?: string,
+    customRpcUrl?: string,
+    customNetworkName?: string,
+    customNetworkNameLong?: string,
+    customNetworkCurrency?: string,
+    customNetworkCurrencyLong?: string,
+    customChainId?: string,
+    customBlockExplorerUrlTx?: string
+    customBlockExplorerUrlAddr?: string
+  },
 ) => {
-  metrics.track("network", { event, ...options });
+  metrics.track('network', { event, ...options });
 };
 
 const trackSwapEvents = (
@@ -33,18 +51,18 @@ const trackSwapEvents = (
     toToken?: string;
     swapProvider?: string;
     error?: string;
-  }
+  },
 ) => {
-  metrics.track("swap", { event, ...options });
+  metrics.track('swap', { event, ...options });
 };
 
 const trackBuyEvents = (
   event: BuyEventType,
   options: {
     network: NetworkNames;
-  }
+  },
 ) => {
-  metrics.track("buy", { event, ...options });
+  metrics.track('buy', { event, ...options });
 };
 
 const trackSendEvents = (
@@ -52,40 +70,50 @@ const trackSendEvents = (
   options: {
     network: NetworkNames;
     error?: string;
-  }
+  },
 ) => {
-  metrics.track("send", { event, ...options });
+  metrics.track('send', { event, ...options });
 };
 
 const trackNFTEvents = (
   event: NFTEventType,
   options: {
     network: NetworkNames;
-  }
+  },
 ) => {
-  metrics.track("nft", { event, ...options });
+  metrics.track('nft', { event, ...options });
 };
 
 const trackDAppsEvents = (
   event: DAppsEventType,
   options: {
     network: NetworkNames;
-  }
+  },
 ) => {
-  metrics.track("dapps", { event, ...options });
+  metrics.track('dapps', { event, ...options });
 };
 
+const trackUpdatesEvents = (event: UpdatesEventType, options: {
+  network: NetworkNames;
+  location?: UpdatesOpenLocation;
+  duration?: number;
+}): void => {
+  metrics.track('updatesClick', { event, ...options });
+
+}
 const optOutofMetrics = (optOut: boolean) => {
-  metrics.setOptOut(false);
-  metrics.track("settings", {
-    event: SettingEventType.OptOut,
-    value: optOut ? 1 : 0,
-  });
+  if (!__IS_FIREFOX__) {
+    metrics.setOptOut(false);
+    metrics.track('settings', {
+      event: SettingEventType.OptOut,
+      value: optOut ? 1 : 0,
+    });
+  }
   metrics.setOptOut(optOut);
 };
 
 export {
-  trackNetworkSelected,
+  trackNetwork,
   trackSwapEvents,
   trackBuyEvents,
   trackSendEvents,
@@ -93,4 +121,5 @@ export {
   trackDAppsEvents,
   optOutofMetrics,
   trackGenericEvents,
+  trackUpdatesEvents
 };

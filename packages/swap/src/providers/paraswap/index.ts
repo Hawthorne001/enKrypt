@@ -1,6 +1,5 @@
 import type Web3Eth from "web3-eth";
 import { numberToHex, toBN } from "web3-utils";
-import fetch from "node-fetch";
 import {
   EVMTransaction,
   getQuoteOptions,
@@ -35,11 +34,11 @@ import {
   getAllowanceTransactions,
   TOKEN_AMOUNT_INFINITY_AND_BEYOND,
 } from "../../utils/approvals";
-import estimateGasList from "../../common/estimateGasList";
+import estimateEVMGasList from "../../common/estimateGasList";
 import { isEVMAddress } from "../../utils/common";
 
 export const PARASWAP_APPROVAL_ADDRESS =
-  "0x216b4b4ba9f3e719726886d34a177484278bfcae";
+  "0x6a000f20005980200259b80c5102003040001068";
 
 const supportedNetworks: {
   [key in SupportedNetworkName]?: { approvalAddress: string; chainId: string };
@@ -69,11 +68,11 @@ const supportedNetworks: {
     chainId: "42161",
   },
   [SupportedNetworkName.Base]: {
-    approvalAddress: "0x93aAAe79a53759cD164340E4C8766E4Db5331cD7",
+    approvalAddress: PARASWAP_APPROVAL_ADDRESS,
     chainId: "8453",
   },
   [SupportedNetworkName.MaticZK]: {
-    approvalAddress: "0xc8a21fcd5a100c3ecc037c97e2f9c53a8d3a02a1",
+    approvalAddress: PARASWAP_APPROVAL_ADDRESS,
     chainId: "1101",
   },
 };
@@ -94,7 +93,7 @@ class ParaSwap extends ProviderClass {
   toTokens: ProviderToTokenResponse;
 
   constructor(web3eth: Web3Eth, network: SupportedNetworkName) {
-    super(web3eth, network);
+    super();
     this.network = network;
     this.tokenList = [];
     this.web3eth = web3eth;
@@ -121,7 +120,7 @@ class ParaSwap extends ProviderClass {
 
   static isSupported(network: SupportedNetworkName) {
     return Object.keys(supportedNetworks).includes(
-      network as unknown as string
+      network as unknown as string,
     );
   }
 
@@ -145,11 +144,11 @@ class ParaSwap extends ProviderClass {
   private getParaswapSwap(
     options: getQuoteOptions,
     meta: QuoteMetaOptions,
-    accurateEstimate: boolean
+    accurateEstimate: boolean,
   ): Promise<ParaSwapSwapResponse | null> {
     if (
       !ParaSwap.isSupported(
-        options.toToken.networkInfo.name as SupportedNetworkName
+        options.toToken.networkInfo.name as SupportedNetworkName,
       ) ||
       this.network !== options.toToken.networkInfo.name
     )
@@ -174,13 +173,14 @@ class ParaSwap extends ProviderClass {
         (
           parseFloat(meta.slippage ? meta.slippage : DEFAULT_SLIPPAGE) * 10
         ).toString(),
-        10
+        10,
       ).toString(),
       deadline: Math.floor(Date.now() / 1000) + 300,
       partnerAddress: feeConfig ? feeConfig.referrer : "",
       partnerFeeBps: feeConfig
         ? parseInt((feeConfig.fee * 10000).toString(), 10).toString()
         : "0",
+      isDirectFeeTransfer: true,
     });
     return fetch(
       `${BASE_URL}transactions/${
@@ -193,12 +193,12 @@ class ParaSwap extends ProviderClass {
           "Content-Type": "application/json",
         },
         body,
-      }
+      },
     )
       .then((res) => res.json())
       .then(async (response: ParaswapResponseType) => {
         if (response.error) {
-          console.error(response.error);
+          console.error("Error in swap response from ParaSwap", response.error);
           return Promise.resolve(null);
         }
         const transactions: EVMTransaction[] = [];
@@ -223,9 +223,9 @@ class ParaSwap extends ProviderClass {
           type: TransactionType.evm,
         });
         if (accurateEstimate) {
-          const accurateGasEstimate = await estimateGasList(
+          const accurateGasEstimate = await estimateEVMGasList(
             transactions,
-            this.network
+            this.network,
           );
           if (accurateGasEstimate) {
             if (accurateGasEstimate.isError) return null;
@@ -237,26 +237,26 @@ class ParaSwap extends ProviderClass {
         return {
           transactions,
           toTokenAmount: toBN(
-            (meta.priceRoute as ParaswpQuoteResponse).destAmount
+            (meta.priceRoute as ParaswpQuoteResponse).destAmount,
           ),
           fromTokenAmount: toBN(
-            (meta.priceRoute as ParaswpQuoteResponse).srcAmount
+            (meta.priceRoute as ParaswpQuoteResponse).srcAmount,
           ),
         };
       })
       .catch((e) => {
-        console.error(e);
+        console.error("Error generating swap from ParaSwap", e);
         return Promise.resolve(null);
       });
   }
 
   getQuote(
     options: getQuoteOptions,
-    meta: QuoteMetaOptions
+    meta: QuoteMetaOptions,
   ): Promise<ProviderQuoteResponse | null> {
     if (
       !ParaSwap.isSupported(
-        options.toToken.networkInfo.name as SupportedNetworkName
+        options.toToken.networkInfo.name as SupportedNetworkName,
       ) ||
       this.network !== options.toToken.networkInfo.name
     )
@@ -269,10 +269,12 @@ class ParaSwap extends ProviderClass {
       destDecimals: options.toToken.decimals.toString(),
       amount: options.amount.toString(),
       side: "SELL",
+      excludeDEXS: "ParaSwapPool,ParaSwapLimitOrders",
       network: supportedNetworks[this.network].chainId,
       userAddress: options.fromAddress,
       receiver: options.toAddress,
       partnerAddress: feeConfig ? feeConfig.referrer : "",
+      version: "6.2",
       partnerFeeBps: feeConfig
         ? parseInt((feeConfig.fee * 10000).toString(), 10).toString()
         : "0",
@@ -281,6 +283,18 @@ class ParaSwap extends ProviderClass {
       .then((j) => j.json())
       .then(async (jsonRes) => {
         if (!jsonRes) return null;
+        // Note: sometimes `jsonRes.priceRoute` is undefined and "error" is set instead
+        if (!jsonRes.priceRoute) {
+          if (jsonRes.error) {
+            // Sometimes ParaSwap returns this error: "No routes found with enough liquidity"
+            throw new Error(`ParaSwap error getting prices: ${jsonRes.error}`);
+          } else {
+            // Didn't have the expected "priceRoute" property
+            throw new Error(
+              `ParaSwap error getting prices, no "priceRoute" property on response: ${JSON.stringify(jsonRes)}`,
+            );
+          }
+        }
         const res: ParaswpQuoteResponse = jsonRes.priceRoute;
         const transactions: EVMTransaction[] = [];
         if (options.fromToken.address !== NATIVE_TOKEN_ADDRESS) {
@@ -311,14 +325,14 @@ class ParaSwap extends ProviderClass {
             transactions.reduce(
               (total: number, curVal: EVMTransaction) =>
                 total + toBN(curVal.gasLimit).toNumber(),
-              0
+              0,
             ) + toBN(GAS_LIMITS.swap).toNumber(),
           minMax: await this.getMinMaxAmount(),
         };
         return response;
       })
       .catch((e) => {
-        console.error(e);
+        console.error("Error getting quote from ParaSwap", e);
         return Promise.resolve(null);
       });
   }
@@ -337,7 +351,7 @@ class ParaSwap extends ProviderClass {
         slippage: quote.meta.slippage || DEFAULT_SLIPPAGE,
         fee: feeConfig * 100,
         getStatusObject: async (
-          options: StatusOptions
+          options: StatusOptions,
         ): Promise<StatusOptionsResponse> => ({
           options,
           provider: this.name,
@@ -348,8 +362,8 @@ class ParaSwap extends ProviderClass {
   }
 
   getStatus(options: StatusOptions): Promise<TransactionStatus> {
-    const promises = options.transactionHashes.map((hash) =>
-      this.web3eth.getTransactionReceipt(hash)
+    const promises = options.transactions.map(({ hash }) =>
+      this.web3eth.getTransactionReceipt(hash),
     );
     return Promise.all(promises).then((receipts) => {
       // eslint-disable-next-line no-restricted-syntax
