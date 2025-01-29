@@ -9,7 +9,10 @@
         class="send-contacts-list__scroll-area"
         :settings="scrollSettings({ suppressScrollX: true })"
       >
-        <div v-if="!isMyAddress" class="send-contacts-list__block">
+        <div
+          v-if="recentlySentAddresses && !isMyAddress"
+          class="send-contacts-list__block"
+        >
           <div class="send-contacts-list__buttons">
             <base-button title="Send to my address" :click="sendToMyAddress" />
 
@@ -20,7 +23,31 @@
               <paste-icon /> Paste
             </a>
           </div>
-          <h3>Recent</h3>
+          <template v-if="recentlySentAddresses.length">
+            <h3>Recent</h3>
+            <div class="send-contacts-list__list">
+              <send-address-item
+                v-for="(recentAddress, index) in recentlySentAddresses"
+                :key="index"
+                :account="{
+                  address: recentAddress,
+                  name: accountInfo.activeAccounts.find(
+                    account =>
+                      network.displayAddress(account.address) ===
+                      network.displayAddress(recentAddress),
+                  )?.name,
+                }"
+                :network="network"
+                v-bind="$attrs"
+                :is-checked="
+                  !!address &&
+                  network.displayAddress(address) ===
+                    network.displayAddress(recentAddress)
+                "
+              />
+            </div>
+          </template>
+          <h3>My accounts</h3>
           <div class="send-contacts-list__list">
             <send-address-item
               v-for="(account, index) in accountInfo.activeAccounts"
@@ -28,7 +55,11 @@
               :account="account"
               :network="network"
               v-bind="$attrs"
-              :is-checked="address == account.address"
+              :is-checked="
+                !!address &&
+                network.displayAddress(address) ===
+                  network.displayAddress(account.address)
+              "
             />
           </div>
         </div>
@@ -39,7 +70,6 @@
             </a>
             <h4>My accounts</h4>
           </div>
-
           <div class="send-contacts-list__list">
             <send-address-item
               v-for="(account, index) in accountInfo.activeAccounts"
@@ -47,7 +77,11 @@
               :account="account"
               :network="network"
               v-bind="$attrs"
-              :is-checked="address == account.address"
+              :is-checked="
+                !!address &&
+                network.displayAddress(address) ===
+                  network.displayAddress(account.address)
+              "
             />
           </div>
         </div>
@@ -57,24 +91,25 @@
 </template>
 
 <script setup lang="ts">
-import { PropType, ref } from "vue";
-import SendAddressItem from "./send-address-item.vue";
-import CustomScrollbar from "@action/components/custom-scrollbar/index.vue";
-import BaseButton from "@action/components/base-button/index.vue";
-import { AccountsHeaderData } from "@action/types/account";
-import scrollSettings from "@/libs/utils/scroll-settings";
-import { BaseNetwork } from "@/types/base-network";
-import PasteIcon from "@action/icons/actions/paste.vue";
-import ArrowBack from "@action/icons/common/arrow-back.vue";
+import { onMounted, PropType, ref } from 'vue';
+import SendAddressItem from './send-address-item.vue';
+import CustomScrollbar from '@action/components/custom-scrollbar/index.vue';
+import BaseButton from '@action/components/base-button/index.vue';
+import { AccountsHeaderData } from '@action/types/account';
+import scrollSettings from '@/libs/utils/scroll-settings';
+import { BaseNetwork } from '@/types/base-network';
+import PasteIcon from '@action/icons/actions/paste.vue';
+import ArrowBack from '@action/icons/common/arrow-back.vue';
+import RecentlySentAddressesState from '@/libs/recently-sent-addresses';
 
 const emit = defineEmits<{
-  (e: "update:pasteFromClipboard"): void;
-  (e: "close", open: false): void;
+  (e: 'update:pasteFromClipboard'): void;
+  (e: 'close', open: false): void;
 }>();
 
 const isMyAddress = ref(false);
 
-defineProps({
+const props = defineProps({
   showAccounts: Boolean,
   accountInfo: {
     type: Object as PropType<AccountsHeaderData>,
@@ -86,12 +121,42 @@ defineProps({
   },
   address: {
     type: String,
-    default: "",
+    default: '',
   },
 });
 
+const recentlySentAddressesState = new RecentlySentAddressesState();
+
+const recentlySentAddresses = ref<null | string[]>(null);
+
+onMounted(async function () {
+  let timedOut = false;
+  const timeout = setTimeout(function () {
+    console.error('Timed out getting recently sent addresses');
+    recentlySentAddresses.value = [];
+    timedOut = true;
+  }, 500);
+  try {
+    const addresses = await recentlySentAddressesState.getRecentlySentAddresses(
+      props.network.name,
+    );
+    if (!timedOut) {
+      recentlySentAddresses.value = Array.from(
+        new Set(
+          addresses.map(address => props.network.displayAddress(address)),
+        ),
+      );
+    }
+  } catch (err) {
+    console.error('Error getting recently sent addresses', err);
+    recentlySentAddresses.value = [];
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 const close = () => {
-  emit("close", false);
+  emit('close', false);
 };
 
 const sendToMyAddress = () => {
@@ -103,12 +168,12 @@ const back = () => {
 };
 
 const pasteFromClipboard = () => {
-  emit("update:pasteFromClipboard");
+  emit('update:pasteFromClipboard');
 };
 </script>
 
 <style lang="less" scoped>
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 
 .send-contacts-list {
   width: 100%;
@@ -140,7 +205,8 @@ const pasteFromClipboard = () => {
     left: 32px;
     top: 221px;
     background: #ffffff;
-    box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.039),
+    box-shadow:
+      0px 3px 6px rgba(0, 0, 0, 0.039),
       0px 7px 24px rgba(0, 0, 0, 0.19);
     border-radius: 12px;
     z-index: 103;
@@ -149,7 +215,9 @@ const pasteFromClipboard = () => {
     box-sizing: border-box;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s, visibility 0s ease-in-out 0.3s;
+    transition:
+      opacity 0.3s,
+      visibility 0s ease-in-out 0.3s;
 
     &.show {
       opacity: 1;
@@ -166,7 +234,7 @@ const pasteFromClipboard = () => {
     position: relative;
     margin: auto;
     width: 100%;
-    max-height: 380px;
+    max-height: 330px;
   }
 
   h3 {

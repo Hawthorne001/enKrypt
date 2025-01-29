@@ -3,17 +3,17 @@
  * reference: https://github.com/bitcoinjs/varuint-bitcoin/blob/master/index.js
  */
 
-import { BitcoinNetwork, PaymentType } from "../types/bitcoin-network";
-import { address as BTCAddress, Transaction, Psbt } from "bitcoinjs-lib";
-import { sha256 } from "ethereum-cryptography/sha256";
-import { PSBTSigner } from "../ui/libs/signer";
-import { bufferToHex } from "@enkryptcom/utils";
+import { BitcoinNetwork, PaymentType } from '../types/bitcoin-network';
+import { address as BTCAddress, Transaction, Psbt } from 'bitcoinjs-lib';
+import { sha256 } from 'ethereum-cryptography/sha256';
+import { PSBTSigner } from '../ui/libs/signer';
+import { bufferToHex, hexToBuffer } from '@enkryptcom/utils';
 
 const bip0322_hash = (message: string) => {
-  const tag = "BIP0322-signed-message";
+  const tag = 'BIP0322-signed-message';
   const tagHash = sha256(Buffer.from(tag));
   const result = sha256(
-    Buffer.concat([tagHash, tagHash, Buffer.from(message)])
+    Buffer.concat([tagHash, tagHash, Buffer.from(message)]),
   );
   return bufferToHex(result, true);
 };
@@ -22,7 +22,7 @@ const MAX_SAFE_INTEGER = 9007199254740991;
 
 const checkUInt53 = (n: number) => {
   if (n < 0 || n > MAX_SAFE_INTEGER || n % 1 !== 0)
-    throw new RangeError("value out of range");
+    throw new RangeError('value out of range');
 };
 
 const encodingLength = (number: number) => {
@@ -31,17 +31,17 @@ const encodingLength = (number: number) => {
   return number < 0xfd
     ? 1
     : number <= 0xffff
-    ? 3
-    : number <= 0xffffffff
-    ? 5
-    : 9;
+      ? 3
+      : number <= 0xffffffff
+        ? 5
+        : 9;
 };
 export const encode = (number: number, buffer?: Buffer, offset?: number) => {
   checkUInt53(number);
 
   if (!buffer) buffer = Buffer.allocUnsafe(encodingLength(number));
   if (!Buffer.isBuffer(buffer))
-    throw new TypeError("buffer must be a Buffer instance");
+    throw new TypeError('buffer must be a Buffer instance');
   if (!offset) offset = 0;
 
   // 8 bit
@@ -70,7 +70,7 @@ export const encode = (number: number, buffer?: Buffer, offset?: number) => {
 
 export const decode = (buffer: Buffer, offset: number) => {
   if (!Buffer.isBuffer(buffer))
-    throw new TypeError("buffer must be a Buffer instance");
+    throw new TypeError('buffer must be a Buffer instance');
   if (!offset) offset = 0;
   const first = buffer.readUInt8(offset);
   // 8 bit
@@ -92,36 +92,38 @@ export const decode = (buffer: Buffer, offset: number) => {
   }
 };
 
-export async function signMessageOfBIP322Simple({
+const encodeVarString = (b: Buffer) => {
+  return Buffer.concat([encode(b.byteLength), b]);
+};
+
+export function getPSBTMessageOfBIP322Simple({
   message,
   address,
   network,
-  Signer,
 }: {
   message: string;
   address: string;
   network: BitcoinNetwork;
-  Signer: ReturnType<typeof PSBTSigner>;
 }) {
   const outputScript = BTCAddress.toOutputScript(
     network.displayAddress(address),
-    network.networkInfo
+    network.networkInfo,
   );
   const addressType = network.networkInfo.paymentType;
   const supportedTypes = [PaymentType.P2WPKH];
   if (supportedTypes.includes(addressType) == false) {
-    throw new Error("Not support address type to sign");
+    throw new Error('Not support address type to sign');
   }
 
   const prevoutHash = Buffer.from(
-    "0000000000000000000000000000000000000000000000000000000000000000",
-    "hex"
+    '0000000000000000000000000000000000000000000000000000000000000000',
+    'hex',
   );
   const prevoutIndex = 0xffffffff;
   const sequence = 0;
   const scriptSig = Buffer.concat([
-    Buffer.from("0020", "hex"),
-    Buffer.from(bip0322_hash(message), "hex"),
+    Buffer.from('0020', 'hex'),
+    Buffer.from(bip0322_hash(message), 'hex'),
   ]);
 
   const txToSpend = new Transaction();
@@ -139,23 +141,52 @@ export async function signMessageOfBIP322Simple({
       script: outputScript,
       value: 0,
     },
+    bip32Derivation: [
+      {
+        masterFingerprint: Buffer.from('4ab28551', 'hex'), // this will be replaced in hw signer
+        pubkey: hexToBuffer(address),
+        path: "m/84'/0'/0'/0/0", // this will be replaced in hw signer
+      },
+    ],
   });
-  psbtToSign.addOutput({ script: Buffer.from("6a", "hex"), value: 0 });
+  psbtToSign.addOutput({ script: Buffer.from('6a', 'hex'), value: 0 });
 
-  await psbtToSign.signAllInputsAsync(Signer);
-  psbtToSign.finalizeAllInputs();
-  const txToSign = psbtToSign.extractTransaction();
-
-  const encodeVarString = (b: Buffer) => {
-    return Buffer.concat([encode(b.byteLength), b]);
+  return {
+    psbtToSign,
+    txdata: txToSpend,
   };
+}
 
+export function getSignatureFromSignedTransaction(strTx: string): string {
+  const txToSign = Transaction.fromHex(strTx);
   const len = encode(txToSign.ins[0].witness.length);
   const result = Buffer.concat([
     len,
-    ...txToSign.ins[0].witness.map((w) => encodeVarString(w)),
+    ...txToSign.ins[0].witness.map(w => encodeVarString(w)),
   ]);
-  const signature = result.toString("base64");
+  const signature = result.toString('base64');
 
   return signature;
+}
+
+export async function signMessageOfBIP322Simple({
+  message,
+  address,
+  network,
+  Signer,
+}: {
+  message: string;
+  address: string;
+  network: BitcoinNetwork;
+  Signer: ReturnType<typeof PSBTSigner>;
+}) {
+  const psbtToSign = getPSBTMessageOfBIP322Simple({
+    message,
+    address,
+    network,
+  }).psbtToSign;
+  await psbtToSign.signAllInputsAsync(Signer);
+  psbtToSign.finalizeAllInputs();
+  const txToSign = psbtToSign.extractTransaction();
+  return getSignatureFromSignedTransaction(txToSign.toHex());
 }

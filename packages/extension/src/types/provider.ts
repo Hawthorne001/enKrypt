@@ -1,56 +1,62 @@
-import type { InjectedProvider as EthereumProvider } from "../providers/ethereum/types";
-import type { InjectedProvider as PolkadotProvider } from "@/providers/polkadot/types";
-import type { InjectedProvider as BitcoinProvider } from "@/providers/bitcoin/types";
-import type { InjectedProvider as KadenaProvider } from "@/providers/kadena/types";
-import EventEmitter from "eventemitter3";
+import type { InjectedProvider as EthereumProvider } from '../providers/ethereum/types';
+import type { InjectedProvider as PolkadotProvider } from '@/providers/polkadot/types';
+import type { InjectedProvider as BitcoinProvider } from '@/providers/bitcoin/types';
+import type { InjectedProvider as KadenaProvider } from '@/providers/kadena/types';
+import type { InjectedProvider as SolanaProvider } from '@/providers/solana/types';
+import EventEmitter from 'eventemitter3';
 import {
   MiddlewareFunction,
   NetworkNames,
   OnMessageResponse,
   RPCRequestType,
   SignerType,
-} from "@enkryptcom/types";
-import { RouteRecordRaw } from "vue-router";
-import PublicKeyRing from "@/libs/keyring/public-keyring";
-import { RoutesType } from "./ui";
-import { NFTCollection } from "./nft";
-import { BaseNetwork } from "./base-network";
-import { BaseToken } from "./base-token";
+} from '@enkryptcom/types';
+import { RouteRecordRaw } from 'vue-router';
+import PublicKeyRing from '@/libs/keyring/public-keyring';
+import { RoutesType } from './ui';
+import { NFTCollection } from './nft';
+import { BaseNetwork } from './base-network';
+import { BaseToken } from './base-token';
 import {
   BTCRawInfo,
   EthereumRawInfo,
   SubscanExtrinsicInfo,
   KadenaRawInfo,
-} from "./activity";
+  SOLRawInfo,
+} from './activity';
 
 export enum ProviderName {
-  enkrypt = "enkrypt",
-  ethereum = "ethereum",
-  bitcoin = "bitcoin",
-  polkadot = "polkadot",
-  kadena = "kadena",
+  enkrypt = 'enkrypt',
+  ethereum = 'ethereum',
+  bitcoin = 'bitcoin',
+  polkadot = 'polkadot',
+  kadena = 'kadena',
+  solana = 'solana',
 }
 export enum InternalStorageNamespace {
-  keyring = "KeyRing",
-  persistentEvents = "PersistentEvents",
-  domainState = "DomainState",
-  evmAccountsState = "EVMAccountsState",
-  substrateAccountsState = "SubstrateAccountsState",
-  bitcoinAccountsState = "BitcoinAccountsState",
-  kadenaAccountsState = "KadenaAccountsState",
-  activityState = "ActivityState",
-  marketData = "MarketData",
-  cacheFetch = "CacheFetch",
-  nftState = "NFTState",
-  networksState = "NetworksState",
-  settingsState = "SettingsState",
-  tokensState = "TokensState",
-  customNetworksState = "CustomNetworksState",
-  rateState = "RateState",
+  keyring = 'KeyRing',
+  persistentEvents = 'PersistentEvents',
+  domainState = 'DomainState',
+  evmAccountsState = 'EVMAccountsState',
+  substrateAccountsState = 'SubstrateAccountsState',
+  bitcoinAccountsState = 'BitcoinAccountsState',
+  kadenaAccountsState = 'KadenaAccountsState',
+  solanaAccountsState = 'SolanaAccountsState',
+  activityState = 'ActivityState',
+  marketData = 'MarketData',
+  cacheFetch = 'CacheFetch',
+  nftState = 'NFTState',
+  networksState = 'NetworksState',
+  settingsState = 'SettingsState',
+  tokensState = 'TokensState',
+  customNetworksState = 'CustomNetworksState',
+  rateState = 'RateState',
+  recentlySentAddresses = 'RecentlySentAddresses',
+  updatesState = 'UpdatesState',
 }
 export enum EnkryptProviderEventMethods {
-  persistentEvents = "PersistentEvents",
-  chainChanged = "enkrypt_chainChanged",
+  persistentEvents = 'PersistentEvents',
+  chainChanged = 'enkrypt_chainChanged',
 }
 export type StorageNamespace = ProviderName | InternalStorageNamespace;
 export enum ProviderType {
@@ -58,11 +64,12 @@ export enum ProviderType {
   substrate,
   bitcoin,
   kadena,
+  solana,
 }
 
 export type SendMessageHandler = (
   provider: ProviderName,
-  message: string
+  message: string,
 ) => Promise<any>;
 
 export interface ProviderOptions {
@@ -79,14 +86,14 @@ export interface EIP6963ProviderInfo {
 }
 
 export enum EIP6963Events {
-  request = "eip6963:requestProvider",
-  announce = "eip6963:announceProvider",
+  request = 'eip6963:requestProvider',
+  announce = 'eip6963:announceProvider',
 }
 
 export abstract class ProviderInterface extends EventEmitter {
   name: ProviderName;
   type: ProviderType;
-  version = "";
+  version = '';
   sendMessageHandler: SendMessageHandler;
   constructor(options: ProviderOptions) {
     super();
@@ -114,34 +121,52 @@ export abstract class BackgroundProviderInterface extends EventEmitter {
   abstract sendNotification(notif: string): Promise<void>;
 }
 
+/**
+ * Wraps basic network functionality to provide common features like balances and transaction statuses.
+ *
+ * Each network type will typically have its own implementing class. For example, for EVM networks the implementing
+ * class need just wrap JSON RPC calls.
+ */
 export abstract class ProviderAPIInterface {
   abstract node: string;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
-  constructor(node: string, options?: unknown) {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(node: string, options?: unknown) { }
   abstract init(): Promise<void>;
   abstract getBalance(address: string): Promise<string>;
   abstract getTransactionStatus(
-    hash: string
+    hash: string,
   ): Promise<
-    EthereumRawInfo | SubscanExtrinsicInfo | BTCRawInfo | KadenaRawInfo | null
+    | EthereumRawInfo
+    | SubscanExtrinsicInfo
+    | BTCRawInfo
+    | KadenaRawInfo
+    | SOLRawInfo
+    | null
   >;
 }
 
 export type handleIncomingMessage = (
   provider: Provider,
-  message: string
+  message: string,
 ) => void;
 
 export type handleOutgoingMessage = (
   provider: Provider,
-  message: string
+  message: string,
 ) => Promise<any>;
-export { EthereumProvider, PolkadotProvider, BitcoinProvider, KadenaProvider };
+export {
+  EthereumProvider,
+  PolkadotProvider,
+  BitcoinProvider,
+  KadenaProvider,
+  SolanaProvider,
+};
 export type Provider =
   | EthereumProvider
   | PolkadotProvider
   | BitcoinProvider
-  | KadenaProvider;
+  | KadenaProvider
+  | SolanaProvider;
 
 export interface ProviderRequestOptions {
   url: string;
