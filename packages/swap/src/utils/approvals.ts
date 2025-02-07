@@ -7,6 +7,9 @@ import { GAS_LIMITS } from "../configs";
 export const TOKEN_AMOUNT_INFINITY_AND_BEYOND =
   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
+/**
+ * Query the ERC20 `contract` how much `spender` can spend on behalf of `owner`
+ */
 const getAllowance = (options: {
   owner: string;
   contract: string;
@@ -15,11 +18,14 @@ const getAllowance = (options: {
 }): Promise<string> => {
   const contract = new options.web3eth.Contract(
     Erc20abi as any,
-    options.contract
+    options.contract,
   );
   return contract.methods.allowance(options.owner, options.spender).call();
 };
 
+/**
+ * Prepare a transaction of `value` amount of ERC20 `contract` from `from` to `to`
+ */
 const getTransfer = (options: {
   from: string;
   contract: string;
@@ -38,6 +44,10 @@ const getTransfer = (options: {
   };
 };
 
+/**
+ * Prepare a transaction to approve `spender` to spend `value` amount of an
+ * ERC20 `contract` token on behalf of `from`
+ */
 const getApproval = (options: {
   from: string;
   contract: string;
@@ -56,6 +66,10 @@ const getApproval = (options: {
   };
 };
 
+/**
+ * Prepare transactions to approval of `spender` to spend `fromToken`
+ * on behalf of `fromAddress`
+ */
 const getAllowanceTransactions = async (options: {
   fromToken: TokenType;
   fromAddress: string;
@@ -66,16 +80,19 @@ const getAllowanceTransactions = async (options: {
 }): Promise<EVMTransaction[]> => {
   const transactions: EVMTransaction[] = [];
 
+  /** Amount that `spender` can spend of `fromToken` on behalf of `fromAddress` */
   const approvedAmount = toBN(
     await getAllowance({
       contract: options.fromToken.address,
       owner: options.fromAddress,
       spender: options.spender,
       web3eth: options.web3eth,
-    })
+    }),
   );
   if (approvedAmount.lt(options.amount)) {
+    // `spender` isn't approved for enough
     if (approvedAmount.eqn(0)) {
+      // `spender` isn't approved at all
       transactions.push(
         getApproval({
           from: options.fromAddress,
@@ -84,17 +101,21 @@ const getAllowanceTransactions = async (options: {
             ? TOKEN_AMOUNT_INFINITY_AND_BEYOND
             : options.amount.toString(),
           contract: options.fromToken.address,
-        })
+        }),
       );
     } else {
+      // `spender` is approved for some, but not enough
+
+      // Reset approval of `spender`
       transactions.push(
         getApproval({
           from: options.fromAddress,
           spender: options.spender,
           value: "0",
           contract: options.fromToken.address,
-        })
+        }),
       );
+      // Request approval for `spender`
       transactions.push(
         getApproval({
           from: options.fromAddress,
@@ -103,7 +124,7 @@ const getAllowanceTransactions = async (options: {
             ? TOKEN_AMOUNT_INFINITY_AND_BEYOND
             : options.amount.toString(),
           contract: options.fromToken.address,
-        })
+        }),
       );
     }
   }

@@ -1,7 +1,8 @@
 <template>
   <div class="send-alert">
     <alert-icon />
-    <p v-if="belowDust">Minimum amount: {{ dust }}</p>
+    <p v-if="isBalanceZero">Not enough balance.</p>
+    <p v-else-if="belowDust">Minimum amount: {{ dust }}</p>
     <p v-else-if="notEnough">
       Not enough funds. You are<br />~{{
         $filters.formatFloatingPointValue(nativeValue).value
@@ -14,9 +15,9 @@
 </template>
 
 <script setup lang="ts">
-import AlertIcon from "@action/icons/send/alert-icon.vue";
-import BigNumber from "bignumber.js";
-import { computed } from "vue";
+import AlertIcon from '@action/icons/send/alert-icon.vue';
+import BigNumber from 'bignumber.js';
+import { computed } from 'vue';
 
 interface IProps {
   nativeSymbol: string;
@@ -24,18 +25,19 @@ interface IProps {
   price?: string;
   notEnough: boolean;
   belowDust: boolean;
+  isBalanceZero: boolean;
   dust: string;
 }
 
 const props = defineProps<IProps>();
 
 const priceDifference = computed(() => {
-  return new BigNumber(props.nativeValue).times(props.price ?? "0").toFixed();
+  return new BigNumber(props.nativeValue).times(props.price ?? '0').toFixed();
 });
 </script>
 
 <style lang="less">
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 
 .send-alert {
   margin: 0 32px 8px 32px;

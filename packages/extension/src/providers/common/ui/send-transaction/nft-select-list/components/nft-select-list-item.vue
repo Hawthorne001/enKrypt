@@ -1,22 +1,14 @@
 <template>
   <a class="nft-select-list__token" @click="$emit('selectNft', item)">
     <div class="nft-select-list__token-info">
-      <img :src="item.image" />
+      <img :src="item.image" @error="imageLoadError" />
 
       <div class="nft-select-list__token-info-name">
         <h4>
-          {{
-            item.name.length > 40
-              ? item.name.substring(0, 40) + "..."
-              : item.name
-          }}
+          {{ $filters.truncate(item.name, 25) }}
         </h4>
         <p>
-          {{
-            item.collectionName.length > 50
-              ? item.collectionName.substring(0, 50) + "..."
-              : item.collectionName
-          }}
+          {{ $filters.truncate(item.collectionName, 50) }}
         </p>
       </div>
     </div>
@@ -24,11 +16,12 @@
 </template>
 
 <script setup lang="ts">
-import { PropType } from "vue";
-import { NFTItemWithCollectionName } from "@/types/nft";
+import { PropType } from 'vue';
+import { NFTItemWithCollectionName } from '@/types/nft';
+import { imageLoadError } from '@/ui/action/utils/misc';
 
 defineEmits<{
-  (e: "selectNft", data: NFTItemWithCollectionName): void;
+  (e: 'selectNft', data: NFTItemWithCollectionName): void;
 }>();
 defineProps({
   item: {
@@ -39,7 +32,7 @@ defineProps({
 </script>
 
 <style lang="less">
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 
 .nft-select-list {
   &__token {

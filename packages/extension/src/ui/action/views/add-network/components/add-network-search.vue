@@ -5,37 +5,22 @@
     </div>
     <div ref="tooltip" class="add-network__search-wrap">
       <div class="add-network__search-add">
-        <a @click="action">
-          <slider-icon />
-        </a>
-      </div>
-      <div v-show="openList" class="add-network__search-list">
         <a
-          class="add-network__search-list-item"
           @click="$emit('action:customNetwork')"
+          aria-label="Add Custom Network"
         >
-          <custom-network-icon /><span>Custom network</span>
+          <plus-icon />
         </a>
-        <div class="add-network__search-list-item">
-          <test-network-icon /><span>Show testnets</span>
-          <Switch
-            :is-checked="false"
-            @update:check="$emit('toggle:testNetworks')"
-          />
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import BaseSearch from "@action/components/base-search/index.vue";
-import SliderIcon from "@action/icons/common/slider-icon.vue";
-import TestNetworkIcon from "@action/icons/common/test-network-icon.vue";
-import CustomNetworkIcon from "@action/icons/common/custom-network-icon.vue";
-import Switch from "@action/components/switch/index.vue";
-import { onClickOutside } from "@vueuse/core";
+import { ref } from 'vue';
+import BaseSearch from '@action/components/base-search/index.vue';
+import PlusIcon from '@action/icons/common/plus-icon.vue';
+import { onClickOutside } from '@vueuse/core';
 
 const openList = ref(false);
 const tooltip = ref(null);
@@ -43,27 +28,13 @@ defineProps({
   value: {
     type: String,
     default: () => {
-      return "";
+      return '';
     },
   },
 });
 defineEmits<{
-  (e: "toggle:testNetworks"): void;
-  (e: "action:customNetwork"): void;
+  (e: 'action:customNetwork'): void;
 }>();
-
-const action = () => {
-  switch (openList.value) {
-    case false:
-      openList.value = true;
-      break;
-    case true:
-      openList.value = false;
-      break;
-    default:
-      console.error("No status for openList");
-  }
-};
 
 onClickOutside(tooltip, () => {
   if (openList.value) openList.value = false;
@@ -71,7 +42,7 @@ onClickOutside(tooltip, () => {
 </script>
 
 <style lang="less" scoped>
-@import "~@action/styles/theme.less";
+@import '@action/styles/theme.less';
 
 .add-network {
   &__search {
@@ -92,17 +63,13 @@ onClickOutside(tooltip, () => {
     }
 
     &-add {
-      width: 40px;
       font-size: 0;
-      border-radius: 8px;
+      border-radius: 12px;
       transition: background 300ms ease-in-out;
-
+      padding: 8px;
+      cursor: pointer;
       &:hover {
         background: @black007;
-      }
-
-      a {
-        cursor: pointer;
       }
     }
 
@@ -110,7 +77,8 @@ onClickOutside(tooltip, () => {
       width: 256px;
       height: fit-content;
       background: @white;
-      box-shadow: 0px 0.5px 5px rgba(0, 0, 0, 0.039),
+      box-shadow:
+        0px 0.5px 5px rgba(0, 0, 0, 0.039),
         0px 3.75px 11px rgba(0, 0, 0, 0.19);
       border-radius: 12px;
       position: absolute;

@@ -1,10 +1,11 @@
-import { NetworkNames } from "@enkryptcom/types";
+import { NetworkNames } from '@enkryptcom/types';
 
 const newNetworks = [
-  NetworkNames.Kadena,
+  NetworkNames.Form,
   NetworkNames.Rollux,
-  NetworkNames.Syscoin,
+  NetworkNames.SyscoinNEVM,
+  NetworkNames.Fire,
 ];
-const newSwaps = [NetworkNames.MaticZK, NetworkNames.Base];
+const newSwaps: NetworkNames[] = [];
 
 export { newNetworks, newSwaps };

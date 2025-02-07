@@ -1,6 +1,7 @@
-import fetch from "node-fetch";
 import { merge } from "lodash";
 import EventEmitter from "eventemitter3";
+import type Web3Eth from "web3-eth";
+import type { Connection as Web3Solana } from "@solana/web3.js";
 import { TOKEN_LISTS, TOP_TOKEN_INFO_LIST } from "./configs";
 import OneInch from "./providers/oneInch";
 import Paraswap from "./providers/paraswap";
@@ -12,9 +13,8 @@ import NetworkDetails, {
   getSupportedNetworks,
   getNetworkInfoByName,
 } from "./common/supportedNetworks";
-import {
+import type {
   APIType,
-  Events,
   EvmOptions,
   FromTokenType,
   getQuoteOptions,
@@ -23,24 +23,30 @@ import {
   ProviderQuoteResponse,
   ProviderSwapResponse,
   ProviderToTokenResponse,
-  SupportedNetworkName,
   SwapOptions,
   SwapQuote,
   TokenType,
   TokenTypeTo,
   TopTokenInfo,
   ToTokenType,
+  GenericTransaction,
+  SolanaTransaction,
+  EVMTransaction,
+  StatusOptionsResponse,
+  StatusOptions,
+  ProviderClass,
+} from "./types";
+import {
+  SupportedNetworkName,
+  Events,
   WalletIdentifier,
   NetworkType,
-  GenericTransaction,
-  EVMTransaction,
   TransactionType,
-  StatusOptionsResponse,
   TransactionStatus,
-  StatusOptions,
 } from "./types";
 import { sortByRank, sortNativeToFront } from "./utils/common";
 import SwapToken from "./swapToken";
+import { Jupiter } from "./providers/jupiter";
 
 class Swap extends EventEmitter {
   network: SupportedNetworkName;
@@ -51,15 +57,7 @@ class Swap extends EventEmitter {
 
   initPromise: Promise<void>;
 
-  private providerClasses: (
-    | typeof OneInch
-    | typeof Changelly
-    | typeof Paraswap
-    | typeof ZeroX
-    | typeof Rango
-  )[];
-
-  private providers: (OneInch | Changelly | Paraswap | ZeroX | Rango)[];
+  private providers: ProviderClass[];
 
   private tokenList: FromTokenType;
 
@@ -76,12 +74,9 @@ class Swap extends EventEmitter {
     this.network = options.network;
     this.evmOptions = options.evmOptions
       ? options.evmOptions
-      : {
-          infiniteApproval: true,
-        };
+      : { infiniteApproval: true };
     this.api = options.api;
     this.walletId = options.walletIdentifier;
-    this.providerClasses = [OneInch, Paraswap, Changelly, ZeroX, Rango];
     this.topTokenInfo = {
       contractsToId: {},
       topTokens: {},
@@ -106,18 +101,40 @@ class Swap extends EventEmitter {
   }
 
   private async init() {
-    if (TOKEN_LISTS[this.network])
+    if (TOKEN_LISTS[this.network]) {
       this.tokenList = await fetch(TOKEN_LISTS[this.network]).then((res) =>
-        res.json()
+        res.json(),
       );
+    }
+
     this.topTokenInfo = await fetch(TOP_TOKEN_INFO_LIST).then((res) =>
-      res.json()
+      res.json(),
     );
-    this.providers = this.providerClasses.map(
-      (Provider) => new Provider(this.api, this.network)
-    );
+
+    // TODO: use network type instead?
+    switch (this.network) {
+      case SupportedNetworkName.Solana:
+        // Solana
+        this.providers = [
+          new Jupiter(this.api as Web3Solana, this.network),
+          new Rango(this.api as Web3Solana, this.network),
+          new Changelly(this.api, this.network),
+        ];
+        break;
+      default:
+        // EVM
+        this.providers = [
+          new OneInch(this.api as Web3Eth, this.network),
+          new Paraswap(this.api as Web3Eth, this.network),
+          new Changelly(this.api, this.network),
+          new ZeroX(this.api as Web3Eth, this.network),
+          new Rango(this.api as Web3Eth, this.network),
+        ];
+        break;
+    }
+
     await Promise.all(
-      this.providers.map((Provider) => Provider.init(this.tokenList.all))
+      this.providers.map((Provider) => Provider.init(this.tokenList.all)),
     );
     const allFromTokens: ProviderFromTokenResponse = {};
     [...this.providers].reverse().forEach((p) => {
@@ -127,7 +144,7 @@ class Swap extends EventEmitter {
       all: Object.values(allFromTokens).sort(sortNativeToFront),
       top: this.tokenList.top.filter((topt) => !!allFromTokens[topt.address]),
       trending: this.tokenList.trending.filter(
-        (trendt) => !!allFromTokens[trendt.address]
+        (trendt) => !!allFromTokens[trendt.address],
       ),
     };
     const native = this.fromTokens.all.shift();
@@ -175,27 +192,45 @@ class Swap extends EventEmitter {
     return this.toTokens;
   }
 
-  async getQuotes(options: getQuoteOptions): Promise<ProviderQuoteResponse[]> {
+  /**
+   * Request a quote from each provider
+   *
+   * Only providers that support the network will respond
+   */
+  async getQuotes(
+    options: getQuoteOptions,
+    context?: { signal?: AbortSignal },
+  ): Promise<ProviderQuoteResponse[]> {
     const response = await Promise.all(
-      this.providers.map((Provider) =>
-        Provider.getQuote(options, {
-          infiniteApproval: this.evmOptions.infiniteApproval,
-          walletIdentifier: this.walletId,
-        }).then((res) => {
-          if (!res) return res;
-          this.emit(Events.QuoteUpdate, res.toTokenAmount);
-          return res;
-        })
-      )
+      this.providers.map((provider) =>
+        provider
+          .getQuote(
+            options,
+            {
+              infiniteApproval: this.evmOptions.infiniteApproval,
+              walletIdentifier: this.walletId,
+            },
+            context,
+          )
+          .then((res) => {
+            if (!res) return res;
+            this.emit(Events.QuoteUpdate, res.toTokenAmount);
+            return res;
+          }),
+      ),
     );
+    // Sort by the dest token amount i.e. best offer first
     return response
       .filter((res) => res !== null)
       .sort((a, b) => (b.toTokenAmount.gt(a.toTokenAmount) ? 1 : -1));
   }
 
-  getSwap(quote: SwapQuote): Promise<ProviderSwapResponse | null> {
+  getSwap(
+    quote: SwapQuote,
+    context?: { signal?: AbortSignal },
+  ): Promise<ProviderSwapResponse | null> {
     const provider = this.providers.find((p) => p.name === quote.provider);
-    return provider.getSwap(quote);
+    return provider.getSwap(quote, context);
   }
 
   getStatus(options: StatusOptionsResponse): Promise<TransactionStatus | null> {
@@ -224,10 +259,12 @@ export {
   ProviderSwapResponse,
   NetworkType,
   GenericTransaction,
+  SolanaTransaction,
   EVMTransaction,
   TransactionType,
   TransactionStatus,
   StatusOptionsResponse,
   StatusOptions,
 };
+
 export default Swap;
